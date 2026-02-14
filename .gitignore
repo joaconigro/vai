@@ -1,0 +1,23 @@
+# Ignore build artifacts
+target/
+Cargo.lock
+
+# Ignore test outputs
+output_frames/
+*.vai
+*.png
+*.mp4
+*.mkv
+*.avi
+*.webm
+
+# Ignore IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Ignore OS files
+.DS_Store
+Thumbs.db
