@@ -195,7 +195,7 @@ fn decode_video(
         std::fs::create_dir_all(&output_dir).context("Failed to create output directory")?;
 
         let fps = container.fps();
-        let frame_count = ((container.header.duration_ms as f64 / 1000.0) * fps).ceil() as u64;
+        let frame_count = ((container.header.duration_ms as f64 * fps / 1000.0).floor() as u64).max(1);
 
         println!("Extracting {} frames to {}", frame_count, output_dir.display());
 

@@ -34,6 +34,7 @@ impl FrameCompositor {
             self.decoded_assets.insert(asset_id, image);
         }
 
+        // Safe to unwrap as we just inserted it if it wasn't present
         Ok(self.decoded_assets.get(&asset_id).unwrap())
     }
 

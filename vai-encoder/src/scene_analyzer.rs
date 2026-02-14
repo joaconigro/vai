@@ -45,8 +45,8 @@ impl SceneAnalyzer {
 
         // For a basic implementation, we'll create overlay assets for each frame that differs significantly
         // from the background. In production, we'd implement proper motion detection and region extraction.
-        let ms_per_frame = if frames.len() > 1 {
-            duration_ms / (frames.len() as u64 - 1).max(1)
+        let ms_per_frame = if !frames.is_empty() {
+            duration_ms / frames.len() as u64
         } else {
             duration_ms
         };

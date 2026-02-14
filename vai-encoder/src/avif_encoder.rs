@@ -33,6 +33,20 @@ trait AsRgba {
 
 impl AsRgba for [u8] {
     fn as_rgba(&self) -> &[RGBA8] {
+        // Ensure the slice has valid length (multiple of 4)
+        assert_eq!(
+            self.len() % 4,
+            0,
+            "Byte slice length must be multiple of 4 for RGBA conversion"
+        );
+        
+        // Check alignment
+        let align_offset = self.as_ptr().align_offset(std::mem::align_of::<RGBA8>());
+        assert_eq!(
+            align_offset, 0,
+            "Byte slice must be properly aligned for RGBA8"
+        );
+
         unsafe {
             std::slice::from_raw_parts(
                 self.as_ptr() as *const RGBA8,

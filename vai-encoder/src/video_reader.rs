@@ -3,6 +3,16 @@
 use crate::{Error, Result};
 use ffmpeg_next as ffmpeg;
 use image::{ImageBuffer, Rgba};
+use std::sync::Once;
+
+static FFMPEG_INIT: Once = Once::new();
+
+/// Initialize FFmpeg (call once per application)
+fn init_ffmpeg() {
+    FFMPEG_INIT.call_once(|| {
+        ffmpeg::init().expect("Failed to initialize FFmpeg");
+    });
+}
 
 /// Video reader that extracts frames from video files
 pub struct VideoReader {
@@ -15,7 +25,7 @@ pub struct VideoReader {
 impl VideoReader {
     /// Opens a video file
     pub fn open(path: &str) -> Result<Self> {
-        ffmpeg::init()?;
+        init_ffmpeg();
 
         let input = ffmpeg::format::input(&path)?;
         
