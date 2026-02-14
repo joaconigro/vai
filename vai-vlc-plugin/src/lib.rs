@@ -249,13 +249,13 @@ unsafe fn demux_impl(demux: *mut demux_t) -> c_int {
 
 /// Control function - handle seeks and queries
 /// 
-/// Note: We use #[link_section] trick to work around Rust's lack of stable variadic support.
-/// The actual implementation receives a va_list which we cast to access arguments.
+/// Note: VLC passes variadic arguments as a pointer. We access them by casting
+/// to the appropriate pointer type for each query.
 #[no_mangle]
 pub unsafe extern "C" fn Control(
     demux: *mut demux_t,
     query: c_int,
-    args: *mut libc::c_void,  // This is actually a va_list
+    args: *mut libc::c_void,  // Pointer to variadic arguments
 ) -> c_int {
     if demux.is_null() {
         return VLC_EGENERIC;
@@ -330,14 +330,6 @@ pub unsafe extern "C" fn Control(
 //
 // VLC 3.x uses a specific module descriptor format. We need to export
 // vlc_entry__* symbols that VLC will look for.
-
-#[repr(C)]
-struct vlc_module_properties {
-    name: *const libc::c_char,
-    shortname: *const libc::c_char,
-    longname: *const libc::c_char,
-    help: *const libc::c_char,
-}
 
 // Note: The actual VLC plugin registration is complex and version-specific.
 // For a production plugin, you would need to match your VLC version's exact
