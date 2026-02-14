@@ -115,15 +115,13 @@ fn encode_video(
     let (fps_num, fps_den) = reader.frame_rate();
     let duration_ms = reader.duration_ms();
 
-    println!("Video info: {}x{} @ {}/{} fps, {} ms", width, height, fps_num, fps_den, duration_ms);
+    println!(
+        "Video info: {}x{} @ {}/{} fps, {} ms",
+        width, height, fps_num, fps_den, duration_ms
+    );
 
-    // Read all frames
-    println!("Reading frames...");
-    let frames = reader.read_frames().context("Failed to read frames")?;
-    println!("Read {} frames", frames.len());
-
-    // Analyze and create VAI container
-    println!("Analyzing scene and encoding...");
+    // Analyze using streaming (processes one frame at a time)
+    println!("Analyzing scene and encoding (streaming)...");
     let config = EncoderConfig {
         quality,
         fps,
@@ -133,11 +131,12 @@ fn encode_video(
 
     let analyzer = SceneAnalyzer::new(config);
     let container = analyzer
-        .analyze(frames, width, height, fps_num, fps_den, duration_ms)
+        .analyze_streaming(&mut reader, width, height, fps_num, fps_den, duration_ms)
         .context("Failed to analyze video")?;
 
-    println!("Created {} assets and {} timeline entries", 
-        container.assets.len(), 
+    println!(
+        "Created {} assets and {} timeline entries",
+        container.assets.len(),
         container.timeline.len()
     );
 
@@ -145,9 +144,12 @@ fn encode_video(
     println!("Writing VAI file...");
     let file = File::create(&output).context("Failed to create output file")?;
     let mut writer = BufWriter::new(file);
-    container.write(&mut writer).context("Failed to write VAI container")?;
+    container
+        .write(&mut writer)
+        .context("Failed to write VAI container")?;
 
     println!("Successfully encoded to {}", output.display());
+
     Ok(())
 }
 

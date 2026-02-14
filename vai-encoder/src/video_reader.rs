@@ -28,17 +28,18 @@ impl VideoReader {
         init_ffmpeg();
 
         let input = ffmpeg::format::input(&path)?;
-        
+
         // Find the video stream
         let video_stream = input
             .streams()
             .best(ffmpeg::media::Type::Video)
             .ok_or(Error::NoVideoStream)?;
-        
+
         let video_stream_index = video_stream.index();
 
         // Create decoder
-        let context = ffmpeg::codec::context::Context::from_parameters(video_stream.parameters())?;
+        let context =
+            ffmpeg::codec::context::Context::from_parameters(video_stream.parameters())?;
         let decoder = context.decoder().video()?;
 
         Ok(Self {
@@ -71,67 +72,124 @@ impl VideoReader {
         let stream = self.input.stream(self.video_stream_index).unwrap();
         let duration = stream.duration();
         let time_base = stream.time_base();
-        
+
         if duration > 0 {
-            (duration as f64 * time_base.numerator() as f64 / time_base.denominator() as f64 * 1000.0) as u64
+            (duration as f64 * time_base.numerator() as f64 / time_base.denominator() as f64
+                * 1000.0) as u64
         } else {
             // Fallback to container duration
-            let duration = self.input.duration() as f64 / ffmpeg::ffi::AV_TIME_BASE as f64 * 1000.0;
+            let duration =
+                self.input.duration() as f64 / ffmpeg::ffi::AV_TIME_BASE as f64 * 1000.0;
             duration as u64
         }
     }
 
-    /// Reads all frames from the video
-    pub fn read_frames(&mut self) -> Result<Vec<ImageBuffer<Rgba<u8>, Vec<u8>>>> {
-        let mut frames = Vec::new();
-        
-        // Setup scaler for RGBA conversion
+    /// Ensures the scaler is initialized
+    fn ensure_scaler(&mut self) -> Result<()> {
         if self.scaler.is_none() {
             self.scaler = Some(ffmpeg::software::scaling::Context::get(
                 self.decoder.format(),
                 self.decoder.width(),
                 self.decoder.height(),
-                ffmpeg::format::Pixel::RGBA,
+                ffmpeg::format::Pixel::RGB24,
                 self.decoder.width(),
                 self.decoder.height(),
                 ffmpeg::software::scaling::Flags::BILINEAR,
             )?);
         }
+        Ok(())
+    }
 
-        let mut receive_and_process_decoded_frames = |decoder: &mut ffmpeg::decoder::Video| -> Result<()> {
-            let mut decoded = ffmpeg::frame::Video::empty();
-            while decoder.receive_frame(&mut decoded).is_ok() {
-                let mut rgb_frame = ffmpeg::frame::Video::empty();
-                if let Some(ref mut scaler) = self.scaler {
-                    scaler.run(&decoded, &mut rgb_frame)?;
-                    
-                    // Convert frame to ImageBuffer
-                    let data = rgb_frame.data(0).to_vec();
-                    let img = ImageBuffer::<Rgba<u8>, Vec<u8>>::from_raw(
-                        rgb_frame.width(),
-                        rgb_frame.height(),
-                        data,
-                    )
-                    .ok_or_else(|| Error::InvalidVideo)?;
-                    
-                    frames.push(img);
-                }
+    /// Converts a decoded video frame to an RGBA ImageBuffer
+    fn frame_to_rgba(
+        scaler: &mut ffmpeg::software::scaling::Context,
+        decoded: &ffmpeg::frame::Video,
+        width: u32,
+        height: u32,
+    ) -> Result<ImageBuffer<Rgba<u8>, Vec<u8>>> {
+        let mut rgb_frame = ffmpeg::frame::Video::empty();
+        scaler.run(decoded, &mut rgb_frame)?;
+
+        let rgb_data = rgb_frame.data(0);
+        let stride = rgb_frame.stride(0);
+        let mut rgba_data = Vec::with_capacity((width * height * 4) as usize);
+
+        for y in 0..height as usize {
+            let row_start = y * stride;
+            for x in 0..width as usize {
+                let offset = row_start + x * 3;
+                rgba_data.push(rgb_data[offset]);     // R
+                rgba_data.push(rgb_data[offset + 1]); // G
+                rgba_data.push(rgb_data[offset + 2]); // B
+                rgba_data.push(255);                   // A
             }
-            Ok(())
-        };
+        }
 
-        // Read packets and decode
-        for (stream, packet) in self.input.packets() {
-            if stream.index() == self.video_stream_index {
-                self.decoder.send_packet(&packet)?;
-                receive_and_process_decoded_frames(&mut self.decoder)?;
+        ImageBuffer::<Rgba<u8>, Vec<u8>>::from_raw(width, height, rgba_data)
+            .ok_or(Error::InvalidVideo)
+    }
+
+    /// Reads all frames from the video, processing each frame with the given callback.
+    /// This avoids storing all frames in memory at once.
+    pub fn read_frames_streaming<F>(&mut self, mut callback: F) -> Result<()>
+    where
+        F: FnMut(usize, ImageBuffer<Rgba<u8>, Vec<u8>>) -> Result<()>,
+    {
+        let width = self.decoder.width();
+        let height = self.decoder.height();
+        self.ensure_scaler()?;
+
+        let mut frame_index: usize = 0;
+
+        // Collect packets first to avoid borrow issues
+        let packets: Vec<(usize, ffmpeg::Packet)> = self
+            .input
+            .packets()
+            .filter_map(|(stream, packet)| {
+                if stream.index() == self.video_stream_index {
+                    Some((stream.index(), packet))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        for (_stream_idx, packet) in packets {
+            self.decoder.send_packet(&packet)?;
+
+            let mut decoded = ffmpeg::frame::Video::empty();
+            while self.decoder.receive_frame(&mut decoded).is_ok() {
+                if let Some(ref mut scaler) = self.scaler {
+                    let img = Self::frame_to_rgba(scaler, &decoded, width, height)?;
+                    callback(frame_index, img)?;
+                    frame_index += 1;
+                }
             }
         }
 
         // Flush decoder
         self.decoder.send_eof()?;
-        receive_and_process_decoded_frames(&mut self.decoder)?;
+        let mut decoded = ffmpeg::frame::Video::empty();
+        while self.decoder.receive_frame(&mut decoded).is_ok() {
+            if let Some(ref mut scaler) = self.scaler {
+                let img = Self::frame_to_rgba(scaler, &decoded, width, height)?;
+                callback(frame_index, img)?;
+                frame_index += 1;
+            }
+        }
 
+        Ok(())
+    }
+
+    /// Reads all frames from the video into memory.
+    /// WARNING: For large videos this may use excessive memory.
+    /// Prefer `read_frames_streaming` for large files.
+    pub fn read_frames(&mut self) -> Result<Vec<ImageBuffer<Rgba<u8>, Vec<u8>>>> {
+        let mut frames = Vec::new();
+        self.read_frames_streaming(|_idx, frame| {
+            frames.push(frame);
+            Ok(())
+        })?;
         Ok(frames)
     }
 }

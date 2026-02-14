@@ -5,12 +5,14 @@ A sprite-sheet-like video compression format that separates scenes into static b
 ## Overview
 
 VAI is an innovative video format that achieves compression by:
+
 - Extracting a **static background** from video scenes
 - Identifying **moving regions** as separate overlay layers
 - Compressing all assets using **AVIF** (AV1 Image File Format)
 - Using a **timeline script** to describe when and where each layer appears
 
 This approach is particularly effective for videos with:
+
 - Static or mostly static backgrounds
 - Small moving objects or characters
 - Screen recordings with UI elements
@@ -40,22 +42,49 @@ vai/
 ### Prerequisites
 
 - **Rust** (1.70 or later): Install from [rustup.rs](https://rustup.rs/)
-- **FFmpeg** development libraries: Required for video reading
+- **FFmpeg 7** development libraries: Required for video reading (`ffmpeg-next 7.1` is **not** compatible with FFmpeg 8+)
+- **meson** and **ninja**: Required to build the `dav1d` AV1 decoder (used by `libdav1d-sys`)
+- **cmake**: Required to build `libavif` (used by `libavif-sys`)
+- **pkg-config**: Required for locating native libraries
+- **nasm** (optional): May be required for optimized assembly in dav1d
 
-#### Installing FFmpeg (Ubuntu/Debian)
+#### macOS (Homebrew)
+
+```bash
+brew install ffmpeg@7 pkg-config meson ninja cmake nasm
+```
+
+Since `ffmpeg@7` is a keg-only formula, you need to tell `pkg-config` where to find it. Add this to your `~/.zshrc` (or `~/.bash_profile`):
+
+```bash
+export PKG_CONFIG_PATH="/opt/homebrew/opt/ffmpeg@7/lib/pkgconfig:$PKG_CONFIG_PATH"
+```
+
+Then reload your shell:
+
+```bash
+source ~/.zshrc
+```
+
+> **Note:** Homebrew's default `ffmpeg` formula installs FFmpeg 8, which removed the `avfft.h` header that `ffmpeg-sys-next 7.x` expects. You must use `ffmpeg@7` specifically.
+
+#### Ubuntu/Debian
+
 ```bash
 sudo apt-get update
 sudo apt-get install -y ffmpeg libavformat-dev libavcodec-dev libavutil-dev \
-    libswscale-dev libavfilter-dev pkg-config clang
+    libswscale-dev libavfilter-dev pkg-config clang \
+    meson ninja-build cmake nasm
 ```
 
-#### Installing FFmpeg (macOS)
+#### Windows
+
+Download pre-built FFmpeg 7.x binaries from [ffmpeg.org](https://ffmpeg.org/download.html) and ensure they're in your PATH. Then install the build tools:
+
 ```bash
-brew install ffmpeg pkg-config
+pip install meson
+choco install ninja cmake nasm
 ```
-
-#### Installing FFmpeg (Windows)
-Download pre-built FFmpeg binaries from [ffmpeg.org](https://ffmpeg.org/download.html) and ensure they're in your PATH.
 
 ### Building from Source
 
@@ -84,6 +113,7 @@ vai encode input.mp4 -o output.vai --quality 80 --threshold 30 --min-region 64
 ```
 
 **Options:**
+
 - `--quality <0-100>`: AVIF encoding quality (default: 80)
   - Higher values = better quality, larger files
   - 80-90 recommended for most content
@@ -166,6 +196,7 @@ For each timeline entry (count specified in header):
 ### vai-core
 
 The core library provides:
+
 - **Binary format serialization/deserialization**
 - **Data structures**: `VaiHeader`, `Asset`, `TimelineEntry`, `VaiContainer`
 - **Low-level I/O**: Reading and writing `.vai` files
@@ -196,6 +227,7 @@ The decoder reconstructs frames from VAI files:
 ### vai-cli
 
 The command-line tool provides user-facing commands:
+
 - `encode`: Video → VAI conversion
 - `decode`: VAI → frames extraction
 - `--info`: Display VAI file metadata
@@ -227,24 +259,29 @@ This is an initial implementation with room for improvement:
 ## Dependencies
 
 ### Core Libraries
+
 - **byteorder**: Binary serialization
 - **thiserror**: Error handling
 
 ### Image Processing
+
 - **image**: Image manipulation and compositing
 - **ravif**: Pure Rust AVIF encoder
 - **libavif-image**: AVIF decoder
 
 ### Video Processing
+
 - **ffmpeg-next**: FFmpeg bindings for video reading
 
 ### CLI
+
 - **clap**: Command-line argument parsing
 - **anyhow**: Error handling
 
 ## Contributing
 
 Contributions are welcome! Areas for improvement:
+
 - Better background detection algorithms
 - Advanced motion tracking and region extraction
 - Sprite deduplication and optimization
@@ -256,8 +293,9 @@ Contributions are welcome! Areas for improvement:
 ## License
 
 Licensed under either of:
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
-- MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
+- MIT license ([LICENSE-MIT](LICENSE-MIT) or <http://opensource.org/licenses/MIT>)
 
 at your option.
 
