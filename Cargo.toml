@@ -1,0 +1,41 @@
+[workspace]
+resolver = "2"
+members = [
+    "vai-core",
+    "vai-encoder",
+    "vai-decoder",
+    "vai-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["VAI Contributors"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/joaconigro/vai"
+
+[workspace.dependencies]
+# Core dependencies
+thiserror = "2.0"
+anyhow = "1.0"
+byteorder = "1.5"
+
+# Image processing
+image = "0.25"
+ravif = "0.11"
+libavif-image = "0.14"
+
+# Video processing
+ffmpeg-next = "7.1"
+
+# CLI
+clap = { version = "4.5", features = ["derive"] }
+
+# Serialization (optional)
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Internal workspace crates
+vai-core = { path = "vai-core" }
+vai-encoder = { path = "vai-encoder" }
+vai-decoder = { path = "vai-decoder" }

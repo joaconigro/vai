@@ -1,0 +1,20 @@
+[package]
+name = "vai-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "CLI tool for VAI video format"
+
+[[bin]]
+name = "vai"
+path = "src/main.rs"
+
+[dependencies]
+vai-core.workspace = true
+vai-encoder.workspace = true
+vai-decoder.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+image.workspace = true

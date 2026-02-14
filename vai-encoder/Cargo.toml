@@ -1,0 +1,17 @@
+[package]
+name = "vai-encoder"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Encoder library for VAI video format"
+
+[dependencies]
+vai-core.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+image.workspace = true
+ravif.workspace = true
+ffmpeg-next.workspace = true
+num_cpus = "1.16"
