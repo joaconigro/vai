@@ -5,6 +5,7 @@ members = [
     "vai-encoder",
     "vai-decoder",
     "vai-cli",
+    "vai-vlc-plugin",
 ]
 
 [workspace.package]
@@ -19,6 +20,7 @@ repository = "https://github.com/joaconigro/vai"
 thiserror = "2.0"
 anyhow = "1.0"
 byteorder = "1.5"
+libc = "0.2"
 
 # Image processing
 image = "0.25"

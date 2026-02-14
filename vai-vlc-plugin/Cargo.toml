@@ -1,0 +1,17 @@
+[package]
+name = "vai-vlc-plugin"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "VLC media player plugin for VAI video format"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+vai-core.workspace = true
+vai-decoder.workspace = true
+image.workspace = true
+libc.workspace = true
