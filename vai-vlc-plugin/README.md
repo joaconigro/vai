@@ -29,6 +29,10 @@ The plugin:
 
 - Rust toolchain (1.70 or later)
 - VLC media player installed (for testing)
+- **Ubuntu/Debian**: VLC plugin development headers
+  ```bash
+  sudo apt-get install libvlccore-dev
+  ```
 
 ### Build Commands
 
@@ -45,22 +49,19 @@ The compiled plugin will be located at:
 
 ## Installation
 
-### Linux
+### Linux (Ubuntu)
 
-**User-specific installation** (recommended):
-
-```bash
-mkdir -p ~/.local/lib/vlc/plugins/demux/
-cp target/release/libvai_vlc_plugin.so ~/.local/lib/vlc/plugins/demux/
-```
-
-**System-wide installation**:
+On Ubuntu the VLC plugin directory is `/usr/lib/x86_64-linux-gnu/vlc/plugins/`.
 
 ```bash
-sudo cp target/release/libvai_vlc_plugin.so /usr/lib/vlc/plugins/demux/
+# Copy the plugin
+sudo cp target/release/libvai_vlc_plugin.so /usr/lib/x86_64-linux-gnu/vlc/plugins/demux/
+
+# Regenerate VLC's plugin cache so it discovers the new plugin
+sudo /usr/lib/x86_64-linux-gnu/vlc/vlc-cache-gen /usr/lib/x86_64-linux-gnu/vlc/plugins/
 ```
 
-Note: On some systems, the plugin directory might be `/usr/lib/x86_64-linux-gnu/vlc/plugins/demux/` or similar.
+On other distributions the path may differ (e.g. `/usr/lib/vlc/plugins/demux/`).
 
 ### macOS
 
@@ -98,8 +99,9 @@ VLC should automatically detect and use the VAI plugin to play the file.
 
 **Plugin not loading:**
 - Ensure the plugin file is in the correct directory
-- Check VLC's plugin cache: Tools → Preferences → Show settings: All → Advanced → Modules → Reset plugin cache
-- Check VLC's messages log (Tools → Messages) for error messages
+- Regenerate the plugin cache: `sudo /usr/lib/x86_64-linux-gnu/vlc/vlc-cache-gen /usr/lib/x86_64-linux-gnu/vlc/plugins/`
+- Verify the entry point is exported: `nm -D target/release/libvai_vlc_plugin.so | grep vlc_entry` should show `vlc_entry__3_0_0ft64`
+- Check VLC's messages log (Tools → Messages) for error messages, or run `vlc -vvv video.vai`
 
 **Playback issues:**
 - Verify the `.vai` file is valid by testing with the `vai-cli` tool
@@ -115,15 +117,16 @@ This plugin is designed for VLC 3.x. The VLC plugin API is not stable across maj
 
 ### Architecture
 
-The plugin consists of:
-- **vlc_bindings.rs**: Manual C FFI bindings for VLC's plugin API
-- **lib.rs**: Plugin implementation with entry points (Open, Close, Demux, Control)
+The plugin uses a **C shim + Rust core** design:
 
-Key functions:
-- `Open()`: Probes and initializes the demuxer for VAI files
-- `Close()`: Cleanup when file is closed
-- `Demux()`: Called repeatedly by VLC to fetch the next frame
-- `Control()`: Handles seeking and timeline queries
+- **vlc_shim.c**: C bridge that handles all VLC ABI interactions — module descriptor, Open/Close/Demux/Control callbacks, stream I/O, and es_out delivery. This guarantees the correct `vlc_entry__*` symbol that VLC requires.
+- **lib.rs**: Pure Rust logic exposing a small `extern "C"` API (`vai_plugin_open`, `vai_plugin_render`, `vai_plugin_seek_frame`, `vai_plugin_current_frame`, `vai_plugin_advance`, `vai_plugin_close`). No VLC types in Rust.
+
+Key flow:
+1. VLC calls `Open()` in the C shim, which reads the file and passes the bytes to Rust's `vai_plugin_open()`
+2. `Demux()` in C calls `vai_plugin_render()` to get RGBA pixels, packages them into a `block_t`, and sends to VLC
+3. `Control()` in C handles seek/position/time queries by calling `vai_plugin_seek_frame()` / `vai_plugin_current_frame()`
+4. `Close()` in C calls `vai_plugin_close()` to free the Rust state
 
 ### Frame Delivery
 

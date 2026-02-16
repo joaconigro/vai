@@ -3,10 +3,14 @@
 //! This library provides functionality to encode video files into VAI format.
 
 pub mod avif_encoder;
+pub mod progress_tracker;
 pub mod scene_analyzer;
+pub mod scene_detector;
 pub mod video_reader;
 
+pub use progress_tracker::ProgressTracker;
 pub use scene_analyzer::SceneAnalyzer;
+pub use scene_detector::{SceneDetectorConfig, SceneSegment};
 pub use video_reader::VideoReader;
 
 /// Result type for vai-encoder operations

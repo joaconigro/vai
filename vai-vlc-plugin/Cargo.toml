@@ -14,4 +14,3 @@ crate-type = ["cdylib"]
 vai-core.workspace = true
 vai-decoder.workspace = true
 image.workspace = true
-libc.workspace = true

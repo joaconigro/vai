@@ -9,7 +9,7 @@ use std::io::BufWriter;
 use std::path::PathBuf;
 use vai_core::VaiContainer;
 use vai_decoder::FrameCompositor;
-use vai_encoder::{EncoderConfig, SceneAnalyzer, VideoReader};
+use vai_encoder::{EncoderConfig, SceneAnalyzer, SceneDetectorConfig, VideoReader};
 
 #[derive(Parser)]
 #[command(name = "vai")]
@@ -102,13 +102,11 @@ fn encode_video(
     println!("Encoding video: {}", input.display());
     println!("Output: {}", output.display());
 
+    let input_str = input.to_str().context("Invalid input path")?;
+
     // Open video file
-    let mut reader = VideoReader::open(
-        input
-            .to_str()
-            .context("Invalid input path")?,
-    )
-    .context("Failed to open video file")?;
+    let mut reader = VideoReader::open(input_str)
+        .context("Failed to open video file")?;
 
     let width = reader.width();
     let height = reader.height();
@@ -120,8 +118,6 @@ fn encode_video(
         width, height, fps_num, fps_den, duration_ms
     );
 
-    // Analyze using streaming (processes one frame at a time)
-    println!("Analyzing scene and encoding (streaming)...");
     let config = EncoderConfig {
         quality,
         fps,
@@ -129,13 +125,44 @@ fn encode_video(
         min_region_size: min_region,
     };
 
-    let analyzer = SceneAnalyzer::new(config);
-    let container = analyzer
-        .analyze_streaming(&mut reader, width, height, fps_num, fps_den, duration_ms)
-        .context("Failed to analyze video")?;
+    // === PASS 1: Scene detection ===
+    println!("\nPass 1: Detecting scene changes …");
+    let scene_config = SceneDetectorConfig::default();
+    let mut segments = vai_encoder::scene_detector::detect_scenes(&mut reader, &scene_config)
+        .context("Failed to detect scenes")?;
+
+    // Clamp the last segment's end_frame
+    let total_frames = ((duration_ms as f64 * fps_num as f64) / (fps_den as f64 * 1000.0)).ceil() as usize;
+    if let Some(last) = segments.last_mut() {
+        if last.end_frame == usize::MAX {
+            last.end_frame = total_frames;
+        }
+    }
 
     println!(
-        "Created {} assets and {} timeline entries",
+        "  Detected {} scene(s): {}",
+        segments.len(),
+        segments
+            .iter()
+            .map(|s| format!("frames {}-{}", s.start_frame, s.end_frame))
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+
+    // === PASS 2: Parallel encoding ===
+    println!("\nPass 2: Encoding (parallel) …");
+
+    // Re-open the video for the second pass
+    let mut reader2 = VideoReader::open(input_str)
+        .context("Failed to re-open video file for pass 2")?;
+
+    let analyzer = SceneAnalyzer::new(config);
+    let container = analyzer
+        .analyze_parallel(&mut reader2, segments, width, height, fps_num, fps_den, duration_ms)
+        .context("Failed to encode video")?;
+
+    println!(
+        "\nCreated {} assets and {} timeline entries",
         container.assets.len(),
         container.timeline.len()
     );

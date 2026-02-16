@@ -34,7 +34,8 @@ vai/
 ├── vai-core/          # Core library: binary format and data structures
 ├── vai-encoder/       # Encoder: video → VAI conversion
 ├── vai-decoder/       # Decoder: VAI → frames
-└── vai-cli/           # Command-line interface
+├── vai-cli/           # Command-line interface
+└── vai-vlc-plugin/    # VLC plugin to allow read *.vai files
 ```
 
 ## Installation
@@ -73,7 +74,8 @@ source ~/.zshrc
 ```bash
 sudo apt-get update
 sudo apt-get install -y ffmpeg libavformat-dev libavcodec-dev libavutil-dev \
-    libswscale-dev libavfilter-dev pkg-config clang \
+    libswscale-dev libswresample-dev libavfilter-dev libavdevice-dev \
+    libpostproc-dev pkg-config clang \
     meson ninja-build cmake nasm
 ```
 

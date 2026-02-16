@@ -16,6 +16,7 @@ fn init_ffmpeg() {
 
 /// Video reader that extracts frames from video files
 pub struct VideoReader {
+    path: Option<String>,
     input: ffmpeg::format::context::Input,
     video_stream_index: usize,
     decoder: ffmpeg::codec::decoder::Video,
@@ -43,11 +44,17 @@ impl VideoReader {
         let decoder = context.decoder().video()?;
 
         Ok(Self {
+            path: Some(path.to_string()),
             input,
             video_stream_index,
             decoder,
             scaler: None,
         })
+    }
+
+    /// Returns the file path so the reader can be re-opened for a second pass
+    pub fn path(&self) -> Option<&str> {
+        self.path.as_deref()
     }
 
     /// Gets the video width
@@ -141,26 +148,29 @@ impl VideoReader {
 
         let mut frame_index: usize = 0;
 
-        // Collect packets first to avoid borrow issues
-        let packets: Vec<(usize, ffmpeg::Packet)> = self
-            .input
-            .packets()
-            .filter_map(|(stream, packet)| {
-                if stream.index() == self.video_stream_index {
-                    Some((stream.index(), packet))
-                } else {
-                    None
-                }
-            })
-            .collect();
+        // Destructure self so we can iterate packets from `input` while
+        // simultaneously sending them to `decoder`, without collecting
+        // all packets into memory first.
+        let VideoReader {
+            input,
+            video_stream_index,
+            decoder,
+            scaler,
+            ..
+        } = self;
+        let stream_idx = *video_stream_index;
 
-        for (_stream_idx, packet) in packets {
-            self.decoder.send_packet(&packet)?;
+        for (stream, packet) in input.packets() {
+            if stream.index() != stream_idx {
+                continue;
+            }
+
+            decoder.send_packet(&packet)?;
 
             let mut decoded = ffmpeg::frame::Video::empty();
-            while self.decoder.receive_frame(&mut decoded).is_ok() {
-                if let Some(ref mut scaler) = self.scaler {
-                    let img = Self::frame_to_rgba(scaler, &decoded, width, height)?;
+            while decoder.receive_frame(&mut decoded).is_ok() {
+                if let Some(ref mut sc) = scaler {
+                    let img = Self::frame_to_rgba(sc, &decoded, width, height)?;
                     callback(frame_index, img)?;
                     frame_index += 1;
                 }
@@ -168,11 +178,11 @@ impl VideoReader {
         }
 
         // Flush decoder
-        self.decoder.send_eof()?;
+        decoder.send_eof()?;
         let mut decoded = ffmpeg::frame::Video::empty();
-        while self.decoder.receive_frame(&mut decoded).is_ok() {
-            if let Some(ref mut scaler) = self.scaler {
-                let img = Self::frame_to_rgba(scaler, &decoded, width, height)?;
+        while decoder.receive_frame(&mut decoded).is_ok() {
+            if let Some(ref mut sc) = scaler {
+                let img = Self::frame_to_rgba(sc, &decoded, width, height)?;
                 callback(frame_index, img)?;
                 frame_index += 1;
             }
