@@ -4,7 +4,21 @@ use crate::{Error, Result};
 use image::RgbaImage;
 use ravif::{Encoder, Img, RGBA8};
 
-/// Encodes an RGBA image to AVIF format
+/// Encode an RGBA image to AVIF, dispatching to the FFmpeg backend when
+/// `use_ffmpeg` is true (and falling back to ravif if FFmpeg is unavailable).
+pub fn encode_avif_auto(image: &RgbaImage, quality: u8, use_ffmpeg: bool) -> Result<Vec<u8>> {
+    if use_ffmpeg {
+        match crate::ffmpeg_encoder::encode_avif_ffmpeg(image, quality) {
+            Ok(data) => return Ok(data),
+            Err(e) => {
+                eprintln!("FFmpeg AV1 encode failed ({e}), falling back to ravif");
+            }
+        }
+    }
+    encode_avif(image, quality)
+}
+
+/// Encodes an RGBA image to AVIF format using the pure-Rust ravif encoder
 pub fn encode_avif(image: &RgbaImage, quality: u8) -> Result<Vec<u8>> {
     let width = image.width() as usize;
     let height = image.height() as usize;

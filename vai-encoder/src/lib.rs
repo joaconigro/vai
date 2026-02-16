@@ -3,6 +3,7 @@
 //! This library provides functionality to encode video files into VAI format.
 
 pub mod avif_encoder;
+pub mod ffmpeg_encoder;
 pub mod progress_tracker;
 pub mod scene_analyzer;
 pub mod scene_detector;
@@ -52,6 +53,9 @@ pub struct EncoderConfig {
     pub threshold: u8,
     /// Minimum region size in pixels
     pub min_region_size: u32,
+    /// Use FFmpeg AV1 encoder (libsvtav1) instead of ravif.
+    /// Much faster but requires FFmpeg with AV1 encoder support.
+    pub use_ffmpeg: bool,
 }
 
 impl Default for EncoderConfig {
@@ -61,6 +65,7 @@ impl Default for EncoderConfig {
             fps: None,
             threshold: 30,
             min_region_size: 64,
+            use_ffmpeg: false,
         }
     }
 }

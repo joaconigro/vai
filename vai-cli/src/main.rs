@@ -46,6 +46,11 @@ enum Commands {
         /// Minimum region size in pixels
         #[arg(long, default_value = "64")]
         min_region: u32,
+
+        /// Use FFmpeg AV1 encoder (libsvtav1) for faster encoding.
+        /// Falls back to the built-in ravif encoder if unavailable.
+        #[arg(long)]
+        ffmpeg: bool,
     },
 
     /// Decode a VAI file to frames
@@ -78,7 +83,8 @@ fn main() -> Result<()> {
             fps,
             threshold,
             min_region,
-        } => encode_video(input, output, quality, fps, threshold, min_region)?,
+            ffmpeg,
+        } => encode_video(input, output, quality, fps, threshold, min_region, ffmpeg)?,
 
         Commands::Decode {
             input,
@@ -98,6 +104,7 @@ fn encode_video(
     fps: Option<f64>,
     threshold: u8,
     min_region: u32,
+    use_ffmpeg: bool,
 ) -> Result<()> {
     println!("Encoding video: {}", input.display());
     println!("Output: {}", output.display());
@@ -123,7 +130,18 @@ fn encode_video(
         fps,
         threshold,
         min_region_size: min_region,
+        use_ffmpeg,
     };
+
+    // Report encoder backend
+    if use_ffmpeg {
+        match vai_encoder::ffmpeg_encoder::best_encoder_name() {
+            Some(name) => println!("AVIF encoder: FFmpeg ({name})"),
+            None => println!("AVIF encoder: ravif (FFmpeg AV1 not available, falling back)"),
+        }
+    } else {
+        println!("AVIF encoder: ravif (use --ffmpeg for faster FFmpeg-based encoding)");
+    }
 
     // === PASS 1: Scene detection ===
     println!("\nPass 1: Detecting scene changes …");

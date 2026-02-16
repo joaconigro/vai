@@ -32,7 +32,7 @@ impl SceneAnalyzer {
         }
 
         let background = &frames[0];
-        let background_data = avif_encoder::encode_avif(background, self.config.quality)?;
+        let background_data = avif_encoder::encode_avif_auto(background, self.config.quality, self.config.use_ffmpeg)?;
         let background_asset = Asset::new(0, width, height, background_data);
 
         let mut assets = vec![background_asset];
@@ -52,7 +52,7 @@ impl SceneAnalyzer {
 
             if !diff_regions.is_empty() {
                 for (x, y, region_img) in diff_regions {
-                    let region_data = avif_encoder::encode_avif(&region_img, self.config.quality)?;
+                    let region_data = avif_encoder::encode_avif_auto(&region_img, self.config.quality, self.config.use_ffmpeg)?;
                     let region_asset = Asset::new(
                         asset_id,
                         region_img.width(),
@@ -119,6 +119,7 @@ impl SceneAnalyzer {
         };
 
         let quality = self.config.quality;
+        let use_ffmpeg = self.config.use_ffmpeg;
         let config = self.config.clone();
 
         let progress = ProgressTracker::new(estimated_frame_count, "Encoding frames:");
@@ -127,7 +128,7 @@ impl SceneAnalyzer {
             total_frames = frame_idx + 1;
 
             if frame_idx == 0 {
-                let background_data = avif_encoder::encode_avif(&frame, quality)?;
+                let background_data = avif_encoder::encode_avif_auto(&frame, quality, use_ffmpeg)?;
                 let background_asset = Asset::new(0, width, height, background_data);
                 assets.push(background_asset);
                 timeline.push(TimelineEntry::new(0, 0, duration_ms, 0, 0, 0));
@@ -136,7 +137,7 @@ impl SceneAnalyzer {
                 let diff_regions = find_diff_regions(&config, bg, &frame);
 
                 for (x, y, region_img) in diff_regions {
-                    let region_data = avif_encoder::encode_avif(&region_img, quality)?;
+                    let region_data = avif_encoder::encode_avif_auto(&region_img, quality, use_ffmpeg)?;
                     let region_asset = Asset::new(
                         asset_id,
                         region_img.width(),
@@ -226,6 +227,7 @@ impl SceneAnalyzer {
         };
 
         let quality = self.config.quality;
+        let use_ffmpeg = self.config.use_ffmpeg;
         let config = self.config.clone();
 
         let mut all_assets: Vec<Asset> = Vec::new();
@@ -235,7 +237,7 @@ impl SceneAnalyzer {
         // ── Encode each segment's background up-front ──
         println!("  Encoding {} background(s) …", num_segments);
         for seg in &segments {
-            let bg_data = avif_encoder::encode_avif(&seg.background, quality)?;
+            let bg_data = avif_encoder::encode_avif_auto(&seg.background, quality, use_ffmpeg)?;
             all_assets.push(Asset::new(next_asset_id, width, height, bg_data));
 
             let scene_start_ms = (seg.start_frame as f64 * ms_per_frame) as u64;
@@ -274,6 +276,7 @@ impl SceneAnalyzer {
                     &segments,
                     &config,
                     quality,
+                    use_ffmpeg,
                     ms_per_frame,
                     n_threads,
                     &mut all_assets,
@@ -293,6 +296,7 @@ impl SceneAnalyzer {
                 &segments,
                 &config,
                 quality,
+                use_ffmpeg,
                 ms_per_frame,
                 n_threads,
                 &mut all_assets,
@@ -342,6 +346,7 @@ fn flush_chunk(
     segments: &[SceneSegment],
     config: &EncoderConfig,
     quality: u8,
+    use_ffmpeg: bool,
     ms_per_frame: f64,
     n_threads: usize,
     all_assets: &mut Vec<Asset>,
@@ -367,7 +372,7 @@ fn flush_chunk(
                         let bg = &segments[*seg_idx].background;
                         let diff_regions = find_diff_regions(config, bg, frame);
                         for (x, y, region_img) in diff_regions {
-                            let data = avif_encoder::encode_avif(&region_img, quality)?;
+                            let data = avif_encoder::encode_avif_auto(&region_img, quality, use_ffmpeg)?;
                             thread_results.push((
                                 *frame_idx,
                                 x,
